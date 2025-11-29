@@ -1,0 +1,306 @@
+# Greenline SaaS blueprint for landscaping, garden centers, installers, and growers
+
+You’ve got the domain knowledge and the contacts—let’s architect Greenline like a real product studio would: modular, scalable, and implementation-ready in VS Code. Below is a practical blueprint you can start coding against immediately, with clear modules, data models, API endpoints, and a dev workflow that supports fast iteration.
+
+---
+
+## Vision and scope
+
+- **Core proposition:** Unified operations platform for the green industry—quoting, inventory, scheduling, logistics, and client communication—built for real-world workflows across garden centers, installers, and growers/distributors.
+- **Design principles:** Modular services, clean UX, offline-aware where needed, integrations-first, mobile-friendly crew tooling, and data model consistency across roles.
+- **Initial market fit:** Start with Charlotte installers and local garden centers, expand to multi-location retailers and regional growers.
+
+---
+
+## Core user roles and workflows
+
+- **Roles:**
+  - **Installer crew:** On-site task execution, time tracking, job checklists, plant placement maps.
+  - **Estimator/project manager:** Quote builder, sourcing requests, scheduling, client approvals.
+  - **Garden center staff:** POS tie-ins, inventory counts, wholesale requests, pickup/delivery windows.
+  - **Grower/distributor:** Availability feeds, wholesale pricing tiers, fulfillment timelines.
+  - **Client (property owner):** Approvals, payments, maintenance reminders, warranty claims.
+
+- **Workflows:**
+  - **Quote-to-install:** Estimate → availability check → deposit → schedule → crew workflow → completion → invoice → warranty tracking.
+  - **Sourcing pipeline:** Multi-supplier plant requests → confirmations → substitutions → delivery coordination.
+  - **Inventory updates:** Garden center bulk import (CSV/API) → publish retail/wholesale availability.
+  - **Crew day plan:** Route optimization → material checklist → site notes → photo logs → punchlist closure.
+
+---
+
+## Product modules
+
+- **Estimating and pricing:**
+  - **Flat-rate per plant engine** with size tiers, volume discounts, labor multipliers, and add-ons.
+  - **Template library** for packages and seasonal bundles.
+- **Inventory and sourcing:**
+  - **Catalog normalization** (botanical name, common name, container size, cultivar, availability).
+  - **Supplier requests** and substitutions with traceability.
+- **Scheduling and logistics:**
+  - **Calendar and Gantt views**, crew assignment, route plans, time windows.
+  - **Delivery coordination** and load sheets.
+- **Install execution (crew app):**
+  - **Task lists**, time tracking, site photos, geotagged completion, client signature.
+- **Client portal:**
+  - **Approvals, payments**, live schedule updates, maintenance guidance.
+- **Billing and payments:**
+  - **Deposits, milestones, invoices**, payment links, refunds/credits, taxes.
+- **Warranties and maintenance:**
+  - **Plant-level tracking**, care instructions, claim workflows, scheduled check-ins.
+- **Analytics:**
+  - **Margins, close rates, install efficiency**, supplier performance, SKU velocity.
+
+---
+
+## System architecture and stack
+
+- **Frontend:** React + TypeScript, Vite (fast dev), Tailwind CSS for modular styling. PWA support for offline crew usage.
+- **Backend:** Node.js + TypeScript with NestJS or Express; PostgreSQL for relational integrity; Prisma ORM for developer velocity.
+- **Auth:** JWT-based API auth + OAuth (Google/Microsoft); Role-based access control (RBAC).
+- **File storage:** S3-compatible (e.g., AWS S3) for photos, documents.
+- **Payments:** Stripe for invoices/milestones.
+- **Messaging:** Email (Postmark/SendGrid) + SMS (Twilio) for reminders and confirmations.
+- **Search:** PostgreSQL full-text search or Meilisearch for fast catalog lookup.
+- **Infrastructure:** Docker for local dev; deploy on Render/Fly.io/AWS; CI/CD via GitHub Actions.
+- **Observability:** Logging (Winston), error tracking (Sentry), metrics (Prometheus + Grafana or lightweight service).
+- **Security essentials:** HTTPS everywhere, secure headers, input validation/escaping, least-privilege RBAC, audit logs.
+
+---
+
+## Data model (high-level schema)
+
+- **User**
+  - **Fields:** id, role, orgId, name, email, phone, permissions[]
+- **Organization**
+  - **Fields:** id, type (installer, garden_center, grower), name, settings
+- **PlantCatalogItem**
+  - **Fields:** id, botanicalName, commonName, cultivar, sizeGallons, containerType, sku, photoUrl
+- **Supplier**
+  - **Fields:** id, orgId, name, contact, leadTimeDays, minOrder
+- **Availability**
+  - **Fields:** id, supplierId, plantId, quantity, priceWholesale, location, updatedAt
+- **Estimate**
+  - **Fields:** id, orgId, clientId, status, subtotal, tax, total, marginTarget, notes
+- **EstimateLineItem**
+  - **Fields:** id, estimateId, plantId, qty, unitPrice, laborRateCode, adjustments, lineTotal
+- **Project**
+  - **Fields:** id, orgId, estimateId, status, scheduledStart, scheduledEnd, address, crewId
+- **Crew**
+  - **Fields:** id, orgId, name, members[], certifications[]
+- **Task**
+  - **Fields:** id, projectId, type (delivery, install, cleanup), status, assignedTo, startTime, endTime
+- **PhotoLog**
+  - **Fields:** id, projectId, taskId, url, timestamp, gps
+- **Invoice**
+  - **Fields:** id, projectId, clientId, status, amount, dueDate, stripePaymentIntentId
+- **Warranty**
+  - **Fields:** id, projectId, plantId, coverageMonths, status, notes
+
+---
+
+## API design (example endpoints)
+
+- **Auth & users**
+  - **POST /auth/login** — issue JWT
+  - **GET /users/me** — profile, permissions
+- **Catalog & availability**
+  - **GET /catalog** — filter by size, cultivar, availability
+  - **POST /suppliers/:id/availability** — upsert feed
+- **Estimating**
+  - **POST /estimates** — create estimate
+  - **POST /estimates/:id/line-items** — add plants
+  - **POST /estimates/:id/calc** — apply pricing logic and discount rules
+- **Projects & scheduling**
+  - **POST /projects** — create from approved estimate
+  - **POST /projects/:id/schedule** — assign crew, dates
+  - **POST /tasks/:id/complete** — mark done, upload photos
+- **Payments**
+  - **POST /invoices** — generate
+  - **POST /payments/stripe/webhook** — handle events
+- **Client portal**
+  - **GET /clients/:id/estimates** — view
+  - **POST /clients/:id/approve** — accept estimate
+
+- **Pricing logic service (internal):**
+  - **POST /pricing/quote**
+    - **Input:** plant size counts, labor wage, multipliers, volume discounts
+    - **Output:** line totals, fees, grand total, margin report
+
+---
+
+## Frontend structure (React + TypeScript)
+
+- **App sections:**
+  - **Dashboard:** KPIs, upcoming installs, open estimates.
+  - **Estimating:** Quote builder with plant search, pricing engine sidebar.
+  - **Catalog:** Normalize and tag inventory; supplier view.
+  - **Schedule:** Calendar + crew assignment.
+  - **Crew app (mobile-first):** Task list, geotagged photos, time tracking.
+  - **Client portal:** Approvals, payments, live updates.
+
+- **Component architecture:**
+  - **Design system:** Buttons, inputs, cards, modals, tables.
+  - **Feature modules:** EstimateBuilder, PlantSearch, ScheduleBoard, CrewTasks, ClientApproval.
+  - **State management:** React Query for server state; lightweight Zustand/Recoil for UI state.
+  - **Forms:** React Hook Form + Zod for validation.
+
+---
+
+## Pricing engine logic (implementation-ready)
+
+- **Inputs:**
+  - **Plant counts by size:** 3, 7, 10, 15, 25
+  - **Labor wage:** dollars/hour
+  - **Plants/hr per size:** baseline efficiency
+  - **Market multipliers:** per size
+  - **Volume discounts:** thresholds and percentage
+
+- **Calculations:**
+  - **Labor cost per plant:** wage ÷ plants/hr
+  - **Flat rate per plant:** laborCost × multiplier
+  - **Volume discount:** apply tiered percentage when total plants exceed thresholds
+  - **Totals:** sum line items, compute margin = (total − laborCostTotal) ÷ total
+
+```ts
+// src/services/pricing.ts
+type QuoteInput = {
+  wagePerHour: number;
+  plantsPerHour: Record<number, number>; // {3: 12, 7: 7, 10: 5, 15: 3.5, 25: 2}
+  multipliers: Record<number, number>;   // {3: 15, 7: 15, 10: 16, 15: 20, 25: 18}
+  counts: Record<number, number>;        // e.g., {3: 10, 7: 8, 15: 20}
+  volumeTiers?: { threshold: number; discountPct: number }[];
+};
+
+export function calcQuote(input: QuoteInput) {
+  let laborCostTotal = 0;
+  let grossTotal = 0;
+
+  for (const size of Object.keys(input.counts).map(Number)) {
+    const count = input.counts[size] || 0;
+    const pph = input.plantsPerHour[size];
+    const mult = input.multipliers[size];
+
+    const laborPerPlant = input.wagePerHour / pph; // dollars
+    const flatRate = laborPerPlant * mult;         // market-adjusted
+    const lineLabor = laborPerPlant * count;
+    const lineGross = flatRate * count;
+
+    laborCostTotal += lineLabor;
+    grossTotal += lineGross;
+  }
+
+  // Apply volume discount
+  const totalPlants = Object.values(input.counts).reduce((a, b) => a + b, 0);
+  const discountPct =
+    input.volumeTiers?.sort((a, b) => a.threshold - b.threshold)
+      .reduce((acc, t) => (totalPlants >= t.threshold ? t.discountPct : acc), 0) || 0;
+
+  const discountedTotal = grossTotal * (1 - discountPct / 100);
+  const margin = discountedTotal > 0 ? (discountedTotal - laborCostTotal) / discountedTotal : 0;
+
+  return {
+    lineLaborCost: laborCostTotal,
+    grossTotal,
+    discountedTotal,
+    margin, // e.g., 0.38 = 38%
+    summary: { totalPlants, discountPct }
+  };
+}
+```
+
+---
+
+## VS Code project scaffold
+
+```txt
+greenline/
+├─ apps/
+│  ├─ api/                 # Node + TypeScript (NestJS or Express)
+│  │  ├─ src/
+│  │  │  ├─ main.ts
+│  │  │  ├─ modules/
+│  │  │  │  ├─ auth/
+│  │  │  │  ├─ catalog/
+│  │  │  │  ├─ pricing/
+│  │  │  │  ├─ estimates/
+│  │  │  │  ├─ projects/
+│  │  │  │  ├─ billing/
+│  │  │  ├─ prisma/
+│  │  │  │  ├─ schema.prisma
+│  │  ├─ package.json
+│  ├─ web/                 # React + Vite + TS
+│  │  ├─ src/
+│  │  │  ├─ app/
+│  │  │  ├─ components/
+│  │  │  ├─ pages/
+│  │  │  │  ├─ Dashboard.tsx
+│  │  │  │  ├─ Estimates.tsx
+│  │  │  │  ├─ Catalog.tsx
+│  │  │  │  ├─ Schedule.tsx
+│  │  │  │  ├─ CrewApp.tsx
+│  │  │  │  ├─ ClientPortal.tsx
+│  │  │  ├─ services/
+│  │  │  │  ├─ api.ts
+│  │  │  │  ├─ pricing.ts
+│  │  ├─ package.json
+├─ packages/
+│  ├─ ui/                  # Shared components
+│  ├─ config/              # ESLint, Prettier, Tailwind, tsconfig
+│  ├─ types/               # Shared TypeScript interfaces
+├─ .github/workflows/ci.yml
+├─ docker-compose.yml
+├─ README.md
+```
+
+---
+
+## DevOps, security, and compliance
+
+- **CI/CD:** GitHub Actions for lint/test/build; auto-deploy main branch to staging.
+- **Secrets management:** Use environment variables with GitHub Actions secrets; rotate regularly.
+- **Backups:** Daily PostgreSQL backups; retention policy by environment.
+- **RBAC & audit logs:** Role-enforced endpoints; write audit trails for edits, approvals, payments.
+- **Data protections:** PII minimization, secure payment flows via Stripe, encrypted tokens, CSP/secure headers.
+
+---
+
+## Pricing and business model (SaaS)
+
+- **Tiers:**
+  - **Starter:** 1 org, 5 users, basic estimating and scheduling.
+  - **Professional:** Multi-user, sourcing and supplier integrations, client portal.
+  - **Enterprise:** Multi-location, advanced analytics, custom SLAs, API access.
+- **Add-ons:** SMS credits, premium analytics, white-label client portal, concierge onboarding.
+- **Revenue mix:** Subscription + payment processing margin + onboarding services.
+
+---
+
+## MVP roadmap (8–12 weeks)
+
+1. **Week 1–2:** Auth + RBAC, PostgreSQL schema, pricing engine service, baseline catalog.
+2. **Week 3–4:** Estimate builder UI, plant search, quote generation, PDF export.
+3. **Week 5–6:** Project creation from approved estimates, scheduling, crew app basics.
+4. **Week 7–8:** Payments (Stripe), client portal approvals, email/SMS notifications.
+5. **Week 9–10:** Supplier availability import (CSV/API), substitution flow.
+6. **Week 11–12:** Analytics dashboard, warranty tracking, polish and staging launch.
+
+---
+
+## Immediate next steps in VS Code
+
+- **Initialize repos:**
+  - **API:** `npm create nest@latest` or `npm init -y && npm i express zod jsonwebtoken prisma`
+  - **Web:** `npm create vite@latest greenline-web -- --template react-ts && npm i @tanstack/react-query zod react-hook-form tailwindcss`
+- **Set configs:**
+  - **Prisma:** model the schema above; run `prisma migrate dev`.
+  - **ESLint/Prettier:** enforce clean code; strict TypeScript.
+- **Build first screen:**
+  - **Estimate Builder:** Plant search, line items, pricing sidebar using `calcQuote`.
+- **Seed data:**
+  - **Catalog seeds:** a handful of common plants and sizes for testing.
+- **Ship quick wins:**
+  - **PDF/Shareable quotes**, client approval link, basic schedule.
+
+---
+
