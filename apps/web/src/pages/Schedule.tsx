@@ -98,7 +98,7 @@ export default function Schedule() {
       const startDate = format(startOfWeek(selectedDate), 'yyyy-MM-dd');
       const endDate = format(addDays(startOfWeek(selectedDate), 13), 'yyyy-MM-dd'); // Import 2 weeks
 
-      const response = await axios.post(`${API_URL}/api/schedule/calendar/google/import`, {
+      const response = await axios.post(`/api/schedule/calendar/google/import`, {
         accessToken,
         startDate,
         endDate
@@ -157,7 +157,7 @@ export default function Schedule() {
           end: `${job.date}T${job.endTime}:00`
         };
 
-        await axios.post(`${API_URL}/api/schedule/calendar/google/export`, {
+        await axios.post(`/api/schedule/calendar/google/export`, {
           accessToken,
           event: eventData
         });

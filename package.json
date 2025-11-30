@@ -15,6 +15,7 @@
     "format": "echo \"No formatter configured yet\""
   },
   "devDependencies": {
+    "@vercel/node": "^5.5.13",
     "concurrently": "^8.2.2"
   }
 }

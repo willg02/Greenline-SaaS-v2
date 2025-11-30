@@ -33,7 +33,7 @@ export default function CalendarIntegration() {
   const handleOAuthCallback = async (code: string, provider: string) => {
     try {
       console.log('Exchanging code for tokens...', { code: code.substring(0, 20) + '...', provider });
-      const response = await axios.post(`${API_URL}/api/schedule/calendar/${provider}/callback`, { code });
+      const response = await axios.post(`/api/schedule/calendar/${provider}/callback`, { code });
       
       console.log('Token exchange response:', response.data);
       
@@ -93,7 +93,7 @@ export default function CalendarIntegration() {
 
   const connectGoogle = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/schedule/calendar/google/auth-url`);
+      const response = await axios.get(`/api/schedule/calendar/google/auth-url`);
       // Redirect to Google OAuth
       window.location.href = response.data.authUrl;
     } catch (err: any) {
@@ -132,7 +132,7 @@ export default function CalendarIntegration() {
 
     try {
       if (googleConnection.connected && googleConnection.accessToken) {
-        const response = await axios.post(`${API_URL}/api/schedule/calendar/google/sync`, {
+        const response = await axios.post(`/api/schedule/calendar/google/sync`, {
           accessToken: googleConnection.accessToken,
           localEvents: [] // TODO: Pass actual local jobs to sync
         });
