@@ -20,15 +20,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { provider } = req.query;
 
+    console.log('Auth URL request for provider:', provider);
+    console.log('Environment check:', {
+      hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+      hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+      hasRedirectUri: !!process.env.GOOGLE_REDIRECT_URI
+    });
+
     if (provider === 'google') {
       const googleService = new GoogleCalendarService();
       const authUrl = googleService.getAuthUrl();
+      console.log('Generated auth URL successfully');
       return res.json({ authUrl });
     }
 
     return res.status(400).json({ error: 'Unsupported provider' });
   } catch (error: any) {
     console.error('Auth URL error:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: error.message, stack: error.stack });
   }
 }

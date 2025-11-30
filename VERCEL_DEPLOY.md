@@ -29,14 +29,21 @@ Follow prompts:
 
 Go to your project in Vercel → Settings → Environment Variables and add:
 
+**CRITICAL:** You need to set these for **Production**, **Preview**, AND **Development** environments:
+
 ```
 GOOGLE_CLIENT_ID=<your-client-id-from-.env>
 GOOGLE_CLIENT_SECRET=<your-client-secret-from-.env>
-GOOGLE_REDIRECT_URI=https://your-vercel-url.vercel.app/auth/google/callback
-VITE_API_URL=https://your-vercel-url.vercel.app
+GOOGLE_REDIRECT_URI=https://greenline-saa-s-v-1-bogez5zze-will-gibsons-projects.vercel.app/auth/google/callback
 ```
 
-Copy the values from `apps/api/.env` file (don't commit secrets to GitHub!)
+For each variable:
+1. Enter the name (e.g., `GOOGLE_CLIENT_ID`)
+2. Enter the value from `apps/api/.env`
+3. Check ALL THREE: Production, Preview, Development
+4. Click "Save"
+
+Copy the Client ID and Secret values from your local `apps/api/.env` file.
 
 5. **Update Google Cloud Console**
 
