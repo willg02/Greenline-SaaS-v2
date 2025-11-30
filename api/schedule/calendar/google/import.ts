@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleCalendarService } from '../../../../../apps/api/src/services/google-calendar';
+import { google } from 'googleapis';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -24,8 +24,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Access token required' });
     }
 
-    const googleService = new GoogleCalendarService();
-    const events = await googleService.importEvents(accessToken, startDate, endDate);
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+      timeMax: endDate ? new Date(endDate).toISOString() : undefined,
+      singleEvents: true,
+      orderBy: 'startTime'
+    });
+
+    const events = (response.data.items || []).map(event => ({
+      id: event.id,
+      summary: event.summary || 'Untitled Event',
+      description: event.description || undefined,
+      location: event.location || undefined,
+      start: event.start?.dateTime || event.start?.date || '',
+      end: event.end?.dateTime || event.end?.date || ''
+    }));
 
     return res.json({ events });
   } catch (error: any) {

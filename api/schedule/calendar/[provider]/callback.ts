@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleCalendarService } from '../../../../apps/api/src/services/google-calendar';
+import { google } from 'googleapis';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -24,8 +24,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('OAuth callback:', { provider, hasCode: !!code });
 
     if (provider === 'google') {
-      const googleService = new GoogleCalendarService();
-      const tokens = await googleService.getAccessToken(code);
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+
+      if (!clientId || !clientSecret || !redirectUri) {
+        return res.status(500).json({ error: 'Server configuration error: Missing OAuth credentials' });
+      }
+
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2Client.getToken(code);
 
       return res.json({
         success: true,

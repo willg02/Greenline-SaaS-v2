@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleCalendarService } from '../../../../../apps/api/src/services/google-calendar';
+import { google } from 'googleapis';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -24,10 +24,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Access token and event required' });
     }
 
-    const googleService = new GoogleCalendarService();
-    const result = await googleService.exportEvent(accessToken, event);
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
 
-    return res.json({ success: true, eventId: result.id });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    
+    const result = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: event.summary,
+        description: event.description,
+        location: event.location,
+        start: {
+          dateTime: event.start,
+          timeZone: 'America/New_York'
+        },
+        end: {
+          dateTime: event.end,
+          timeZone: 'America/New_York'
+        }
+      }
+    });
+
+    return res.json({ success: true, eventId: result.data.id });
   } catch (error: any) {
     console.error('Export error:', error);
     return res.status(500).json({ error: error.message });

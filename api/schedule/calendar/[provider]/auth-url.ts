@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleCalendarService } from '../../../apps/api/src/services/google-calendar';
+import { google } from 'googleapis';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -28,8 +28,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (provider === 'google') {
-      const googleService = new GoogleCalendarService();
-      const authUrl = googleService.getAuthUrl();
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+
+      if (!clientId || !clientSecret || !redirectUri) {
+        console.error('Missing environment variables:', { hasClientId: !!clientId, hasClientSecret: !!clientSecret, hasRedirectUri: !!redirectUri });
+        return res.status(500).json({ error: 'Server configuration error: Missing OAuth credentials' });
+      }
+
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      
+      const scopes = [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/calendar.events'
+      ];
+
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent'
+      });
+      
       console.log('Generated auth URL successfully');
       return res.json({ authUrl });
     }
