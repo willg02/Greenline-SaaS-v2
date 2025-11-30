@@ -74,8 +74,8 @@ export default function CalendarIntegration() {
     if (code) {
       console.log('Found OAuth code, exchanging for tokens...');
       handleOAuthCallback(code, provider || 'google');
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Redirect to calendar-integration page after handling callback
+      window.history.replaceState({}, document.title, '/calendar-integration');
     }
 
     // Load saved tokens from localStorage
