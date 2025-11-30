@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { calcQuote } from './services/pricing';
+import scheduleRoutes from './routes/schedule';
 
 const app = express();
 app.use(cors());
@@ -48,6 +49,9 @@ app.post('/pricing/quote', (req, res) => {
   const result = calcQuote(input);
   res.json(result);
 });
+
+// Schedule routes
+app.use('/api/schedule', scheduleRoutes);
 
 const port = Number(process.env.PORT || 4000);
 app.listen(port, () => {

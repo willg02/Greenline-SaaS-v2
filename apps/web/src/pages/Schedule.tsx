@@ -1,55 +1,305 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { Badge } from '../components/Badge';
+import { Calendar, MapPin, Clock, Users, Plus, ExternalLink, RefreshCw, Filter } from 'lucide-react';
+import { format, addDays, startOfWeek } from 'date-fns';
+
+type JobStatus = 'scheduled' | 'in-progress' | 'completed' | 'delayed';
+type CrewMember = { id: string; name: string; role: string; };
+
+interface Job {
+  id: string;
+  title: string;
+  client: string;
+  location: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  crewId: string;
+  crewName: string;
+  status: JobStatus;
+  estimateId?: string;
+  plants: number;
+  priority: 'low' | 'medium' | 'high';
+}
+
+interface Crew {
+  id: string;
+  name: string;
+  members: CrewMember[];
+  color: string;
+  activeJobs: number;
+  availability: 'available' | 'busy' | 'off';
+}
 
 export default function Schedule() {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const events = [
-    { day: 0, time: '8:00 AM', job: 'Johnson Install', crew: 'Team A', duration: 4 },
-    { day: 1, time: '10:00 AM', job: 'Maple St Delivery', crew: 'Team B', duration: 2 },
-    { day: 2, time: '9:00 AM', job: 'Charlotte GC', crew: 'Team A', duration: 3 },
-    { day: 3, time: '2:00 PM', job: 'Riverside Project', crew: 'Team B', duration: 4 },
+  const [selectedView, setSelectedView] = useState<'week' | 'day'>('week');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedCrew, setSelectedCrew] = useState<string>('all');
+
+  const crews: Crew[] = [
+    { id: '1', name: 'Team Alpha', members: [{ id: '1', name: 'John D.', role: 'Lead' }, { id: '2', name: 'Mike S.', role: 'Installer' }], color: 'bg-blue-100 text-blue-800', activeJobs: 2, availability: 'busy' },
+    { id: '2', name: 'Team Beta', members: [{ id: '3', name: 'Sarah L.', role: 'Lead' }, { id: '4', name: 'Tom R.', role: 'Installer' }], color: 'bg-purple-100 text-purple-800', activeJobs: 1, availability: 'available' },
+    { id: '3', name: 'Team Gamma', members: [{ id: '5', name: 'Lisa M.', role: 'Lead' }], color: 'bg-green-100 text-green-800', activeJobs: 0, availability: 'available' },
   ];
 
+  const startDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
+
+  const jobs: Job[] = [
+    { id: '1', title: 'Residential Install', client: 'Johnson Residence', location: '123 Oak St, Charlotte', date: addDays(startDate, 0), startTime: '8:00 AM', endTime: '12:00 PM', duration: 4, crewId: '1', crewName: 'Team Alpha', status: 'scheduled', plants: 38, priority: 'high', estimateId: 'EST-001' },
+    { id: '2', title: 'Garden Center Delivery', client: 'Charlotte GC', location: '456 Main Ave, Matthews', date: addDays(startDate, 0), startTime: '1:00 PM', endTime: '3:00 PM', duration: 2, crewId: '2', crewName: 'Team Beta', status: 'in-progress', plants: 65, priority: 'medium' },
+    { id: '3', title: 'Maple Street Project', client: 'Maple HOA', location: '789 Maple St, Charlotte', date: addDays(startDate, 1), startTime: '9:00 AM', endTime: '2:00 PM', duration: 5, crewId: '1', crewName: 'Team Alpha', status: 'scheduled', plants: 42, priority: 'high', estimateId: 'EST-003' },
+    { id: '4', title: 'Maintenance Visit', client: 'Riverside Development', location: '321 River Rd, Charlotte', date: addDays(startDate, 2), startTime: '10:00 AM', endTime: '12:00 PM', duration: 2, crewId: '2', crewName: 'Team Beta', status: 'scheduled', plants: 0, priority: 'low' },
+    { id: '5', title: 'Emergency Repair', client: 'Sunset Gardens', location: '555 Sunset Blvd, Matthews', date: addDays(startDate, 1), startTime: '3:00 PM', endTime: '5:00 PM', duration: 2, crewId: '3', crewName: 'Team Gamma', status: 'scheduled', plants: 8, priority: 'high' },
+  ];
+
+  const filteredJobs = selectedCrew === 'all' ? jobs : jobs.filter(j => j.crewId === selectedCrew);
+
+  const getStatusColor = (status: JobStatus) => {
+    switch (status) {
+      case 'scheduled': return 'border-blue-500 bg-blue-50';
+      case 'in-progress': return 'border-yellow-500 bg-yellow-50';
+      case 'completed': return 'border-green-500 bg-green-50';
+      case 'delayed': return 'border-red-500 bg-red-50';
+    }
+  };
+
+  const getStatusBadge = (status: JobStatus) => {
+    switch (status) {
+      case 'scheduled': return <Badge variant="info">Scheduled</Badge>;
+      case 'in-progress': return <Badge variant="warning">In Progress</Badge>;
+      case 'completed': return <Badge variant="success">Completed</Badge>;
+      case 'delayed': return <Badge variant="danger">Delayed</Badge>;
+    }
+  };
+
   return (
-    <div className="p-8">
+    <div className="p-8 bg-gray-50 min-h-screen">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
-          <p className="text-gray-500 mt-1">Week of November 18-22, 2025</p>
+          <h1 className="text-3xl font-bold text-gray-900">Schedule & Dispatch</h1>
+          <p className="text-gray-500 mt-1">Week of {format(startDate, 'MMM d')} - {format(addDays(startDate, 6), 'MMM d, yyyy')}</p>
         </div>
-        <button className="px-4 py-2 bg-greenline-600 text-white rounded-lg hover:bg-greenline-700">
-          + New Job
-        </button>
+        <div className="flex gap-3">
+          <a href="/calendar-integration" className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50">
+            <ExternalLink className="w-4 h-4" />
+            Calendar Integration
+          </a>
+          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm">
+            <Plus className="w-5 h-5" />
+            New Job
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-5 border-b border-gray-200">
-          {days.map((day, i) => (
-            <div key={day} className="p-4 text-center border-r last:border-r-0 border-gray-200 bg-gray-50">
-              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{day}</div>
-              <div className="text-lg font-semibold text-gray-900">{18 + i}</div>
-            </div>
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+        {/* Crew Status Cards */}
+        <div className="lg:col-span-1 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Crews</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <button
+                  onClick={() => setSelectedCrew('all')}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                    selectedCrew === 'all' ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-900">All Crews</span>
+                    <Badge>{crews.reduce((sum, c) => sum + c.activeJobs, 0)} jobs</Badge>
+                  </div>
+                </button>
+                
+                {crews.map((crew) => (
+                  <button
+                    key={crew.id}
+                    onClick={() => setSelectedCrew(crew.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                      selectedCrew === crew.id ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-900">{crew.name}</span>
+                      <Badge variant={crew.availability === 'available' ? 'success' : crew.availability === 'busy' ? 'warning' : 'default'}>
+                        {crew.availability}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {crew.members.length} member{crew.members.length > 1 ? 's' : ''} • {crew.activeJobs} active
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Stats */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">This Week</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Total Jobs</span>
+                <span className="font-semibold text-gray-900">{jobs.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">In Progress</span>
+                <span className="font-semibold text-yellow-600">{jobs.filter(j => j.status === 'in-progress').length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Completed</span>
+                <span className="font-semibold text-green-600">{jobs.filter(j => j.status === 'completed').length}</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid grid-cols-5 divide-x divide-gray-200">
-          {days.map((_, dayIndex) => (
-            <div key={dayIndex} className="p-4 min-h-[400px]">
-              {events
-                .filter((e) => e.day === dayIndex)
-                .map((event, i) => (
-                  <div
-                    key={i}
-                    className="mb-2 p-3 bg-greenline-50 border-l-4 border-greenline-600 rounded hover:bg-greenline-100 cursor-pointer"
+        {/* Calendar Grid */}
+        <div className="lg:col-span-3">
+          <Card padding="none">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button className="p-2 hover:bg-gray-100 rounded-lg">
+                  <RefreshCw className="w-4 h-4 text-gray-600" />
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedView('week')}
+                    className={`px-3 py-1 text-sm rounded ${selectedView === 'week' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'}`}
                   >
-                    <div className="text-xs font-medium text-greenline-700 mb-1">{event.time}</div>
-                    <div className="text-sm font-semibold text-gray-900">{event.job}</div>
-                    <div className="text-xs text-gray-600 mt-1">{event.crew} • {event.duration}h</div>
+                    Week
+                  </button>
+                  <button
+                    onClick={() => setSelectedView('day')}
+                    className={`px-3 py-1 text-sm rounded ${selectedView === 'day' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                  >
+                    Day
+                  </button>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+
+            {/* Week View */}
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 border-b border-gray-200">
+                {weekDays.map((day) => (
+                  <div key={day.toISOString()} className="p-3 text-center border-r last:border-r-0 border-gray-200 bg-gray-50">
+                    <div className="text-xs text-gray-500 uppercase tracking-wider">{format(day, 'EEE')}</div>
+                    <div className="text-lg font-semibold text-gray-900 mt-1">{format(day, 'd')}</div>
                   </div>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-7 divide-x divide-gray-200">
+                {weekDays.map((day) => {
+                  const dayJobs = filteredJobs.filter(job => 
+                    format(job.date, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')
+                  );
+                  
+                  return (
+                    <div key={day.toISOString()} className="p-3 min-h-[500px] bg-white">
+                      <div className="space-y-2">
+                        {dayJobs.map((job) => (
+                          <div
+                            key={job.id}
+                            className={`p-3 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all ${getStatusColor(job.status)}`}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="text-xs font-medium text-gray-700 mb-1">
+                                  <Clock className="w-3 h-3 inline mr-1" />
+                                  {job.startTime}
+                                </div>
+                                <div className="text-sm font-semibold text-gray-900 mb-1">{job.title}</div>
+                                <div className="text-xs text-gray-600">{job.client}</div>
+                              </div>
+                              {job.priority === 'high' && (
+                                <Badge variant="danger" className="text-xs">High</Badge>
+                              )}
+                            </div>
+                            
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <Users className="w-3 h-3" />
+                                <span>{job.crewName}</span>
+                              </div>
+                              {job.plants > 0 && (
+                                <div className="text-xs text-gray-500 mt-1">{job.plants} plants</div>
+                              )}
+                            </div>
+                            
+                            <div className="mt-2">
+                              {getStatusBadge(job.status)}
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {dayJobs.length === 0 && (
+                          <div className="text-center py-8 text-gray-400 text-sm">
+                            No jobs scheduled
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ))}
+          </Card>
         </div>
       </div>
+
+      {/* Dispatch Board */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Dispatch Board</CardTitle>
+          <p className="text-sm text-gray-500 mt-1">Real-time job tracking and crew locations</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {jobs.filter(j => j.status === 'in-progress' || j.status === 'scheduled').slice(0, 3).map((job) => (
+              <div key={job.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className={`w-2 h-2 rounded-full ${job.status === 'in-progress' ? 'bg-yellow-500 animate-pulse' : 'bg-blue-500'}`}></div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-gray-900">{job.title}</span>
+                      {getStatusBadge(job.status)}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        {job.location}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        {job.crewName}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {job.startTime} - {job.endTime}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button className="px-4 py-2 text-sm text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                  View Details
+                </button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

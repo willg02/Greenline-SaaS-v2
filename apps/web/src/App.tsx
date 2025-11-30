@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Estimates from './pages/Estimates';
 import Catalog from './pages/Catalog';
 import Schedule from './pages/Schedule';
+import CalendarIntegration from './pages/CalendarIntegration';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/estimates" element={<Estimates />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/schedule" element={<Schedule />} />
+          <Route path="/calendar-integration" element={<CalendarIntegration />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
