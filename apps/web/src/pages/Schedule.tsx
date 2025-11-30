@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Badge } from '../components/Badge';
 import { Calendar, MapPin, Clock, Users, Plus, ExternalLink, RefreshCw, Filter } from 'lucide-react';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format, addDays, startOfWeek, parseISO } from 'date-fns';
+import axios from 'axios';
 
 type JobStatus = 'scheduled' | 'in-progress' | 'completed' | 'delayed';
 type CrewMember = { id: string; name: string; role: string; };
@@ -37,6 +39,13 @@ export default function Schedule() {
   const [selectedView, setSelectedView] = useState<'week' | 'day'>('week');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCrew, setSelectedCrew] = useState<string>('all');
+  const [importedEvents, setImportedEvents] = useState<Job[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
   const crews: Crew[] = [
     { id: '1', name: 'Team Alpha', members: [{ id: '1', name: 'John D.', role: 'Lead' }, { id: '2', name: 'Mike S.', role: 'Installer' }], color: 'bg-blue-100 text-blue-800', activeJobs: 2, availability: 'busy' },
@@ -75,6 +84,109 @@ export default function Schedule() {
     }
   };
 
+  // Import Google Calendar events
+  const importGoogleCalendarEvents = async () => {
+    setIsImporting(true);
+    setError(null);
+    try {
+      const accessToken = localStorage.getItem('google_access_token');
+      if (!accessToken) {
+        setError('No Google Calendar connection found. Please connect your calendar first.');
+        return;
+      }
+
+      const startDate = format(startOfWeek(selectedDate), 'yyyy-MM-dd');
+      const endDate = format(addDays(startOfWeek(selectedDate), 13), 'yyyy-MM-dd'); // Import 2 weeks
+
+      const response = await axios.post(`${API_URL}/api/schedule/calendar/google/import`, {
+        accessToken,
+        startDate,
+        endDate
+      });
+
+      // Map Google Calendar events to Job format
+      const events = response.data.events.map((event: any, index: number) => ({
+        id: `google-${event.id}`,
+        title: event.summary,
+        client: 'Google Calendar',
+        location: event.location || 'No location',
+        date: parseISO(event.start),
+        startTime: format(parseISO(event.start), 'HH:mm'),
+        endTime: format(parseISO(event.end), 'HH:mm'),
+        duration: 0,
+        crewId: 'imported',
+        crewName: 'Imported',
+        status: 'scheduled' as JobStatus,
+        estimateId: undefined,
+        plants: 0,
+        priority: 'low' as const,
+        source: 'google' // Mark as imported from Google
+      }));
+
+      setImportedEvents(events);
+      setLastSyncTime(new Date());
+      console.log(`Imported ${events.length} events from Google Calendar`);
+    } catch (err: any) {
+      console.error('Failed to import Google Calendar events:', err);
+      setError(err.response?.data?.error || 'Failed to import calendar events');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Sync jobs to Google Calendar
+  const syncToGoogleCalendar = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      const accessToken = localStorage.getItem('google_access_token');
+      if (!accessToken) {
+        setError('No Google Calendar connection found. Please connect your calendar first.');
+        return;
+      }
+
+      // Sync all local jobs (not imported ones) to Google Calendar
+      const localJobs = jobs.filter(job => !job.id.startsWith('google-'));
+      
+      for (const job of localJobs) {
+        const eventData = {
+          summary: `${job.title} - ${job.client}`,
+          description: `Estimate: ${job.estimateId}\nCrew: ${job.crewName}\nPriority: ${job.priority}`,
+          location: job.location,
+          start: `${job.date}T${job.startTime}:00`,
+          end: `${job.date}T${job.endTime}:00`
+        };
+
+        await axios.post(`${API_URL}/api/schedule/calendar/google/export`, {
+          accessToken,
+          event: eventData
+        });
+      }
+
+      setLastSyncTime(new Date());
+      alert(`Successfully synced ${localJobs.length} jobs to Google Calendar`);
+      
+      // Re-import to get updated events
+      await importGoogleCalendarEvents();
+    } catch (err: any) {
+      console.error('Failed to sync to Google Calendar:', err);
+      setError(err.response?.data?.error || 'Failed to sync to calendar');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Auto-import on component mount
+  useEffect(() => {
+    const accessToken = localStorage.getItem('google_access_token');
+    if (accessToken) {
+      importGoogleCalendarEvents();
+    }
+  }, [selectedDate]);
+
+  // Combine local jobs with imported events
+  const allJobs = [...jobs, ...importedEvents];
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -82,18 +194,55 @@ export default function Schedule() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Schedule & Dispatch</h1>
           <p className="text-gray-500 mt-1">Week of {format(startDate, 'MMM d')} - {format(addDays(startDate, 6), 'MMM d, yyyy')}</p>
+          {lastSyncTime && (
+            <p className="text-xs text-gray-400 mt-1">
+              Last synced: {format(lastSyncTime, 'MMM d, h:mm a')}
+            </p>
+          )}
         </div>
         <div className="flex gap-3">
-          <a href="/calendar-integration" className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={importGoogleCalendarEvents}
+            disabled={isImporting}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-4 h-4 ${isImporting ? 'animate-spin' : ''}`} />
+            {isImporting ? 'Importing...' : 'Import Calendar'}
+          </button>
+          <button
+            onClick={syncToGoogleCalendar}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2 border border-green-600 bg-white text-green-600 rounded-lg hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync to Google'}
+          </button>
+          <Link to="/calendar-integration" className="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50">
             <ExternalLink className="w-4 h-4" />
             Calendar Integration
-          </a>
+          </Link>
           <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm">
             <Plus className="w-5 h-5" />
             New Job
           </button>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Sync Status */}
+      {importedEvents.length > 0 && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-blue-800 text-sm">
+            ✓ Showing {importedEvents.length} imported Google Calendar events
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         {/* Crew Status Cards */}
@@ -147,15 +296,23 @@ export default function Schedule() {
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Total Jobs</span>
-                <span className="font-semibold text-gray-900">{jobs.length}</span>
+                <span className="font-semibold text-gray-900">{allJobs.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Local Jobs</span>
+                <span className="font-semibold text-blue-600">{jobs.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Imported</span>
+                <span className="font-semibold text-purple-600">{importedEvents.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">In Progress</span>
-                <span className="font-semibold text-yellow-600">{jobs.filter(j => j.status === 'in-progress').length}</span>
+                <span className="font-semibold text-yellow-600">{allJobs.filter(j => j.status === 'in-progress').length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Completed</span>
-                <span className="font-semibold text-green-600">{jobs.filter(j => j.status === 'completed').length}</span>
+                <span className="font-semibold text-green-600">{allJobs.filter(j => j.status === 'completed').length}</span>
               </div>
             </CardContent>
           </Card>
@@ -185,7 +342,7 @@ export default function Schedule() {
                 </div>
               </div>
               <div className="text-sm text-gray-600">
-                {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''}
+                {allJobs.filter(j => selectedCrew === 'all' || j.crewId === selectedCrew).length} job{allJobs.filter(j => selectedCrew === 'all' || j.crewId === selectedCrew).length !== 1 ? 's' : ''}
               </div>
             </div>
 
@@ -202,9 +359,12 @@ export default function Schedule() {
 
               <div className="grid grid-cols-7 divide-x divide-gray-200">
                 {weekDays.map((day) => {
-                  const dayJobs = filteredJobs.filter(job => 
-                    format(job.date, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')
-                  );
+                  const dayJobs = allJobs
+                    .filter(job => selectedCrew === 'all' || job.crewId === selectedCrew)
+                    .filter(job => {
+                      const jobDate = typeof job.date === 'string' ? parseISO(job.date) : job.date;
+                      return format(jobDate, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd');
+                    });
                   
                   return (
                     <div key={day.toISOString()} className="p-3 min-h-[500px] bg-white">
@@ -219,6 +379,9 @@ export default function Schedule() {
                                 <div className="text-xs font-medium text-gray-700 mb-1">
                                   <Clock className="w-3 h-3 inline mr-1" />
                                   {job.startTime}
+                                  {(job as any).source === 'google' && (
+                                    <span className="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded">Google</span>
+                                  )}
                                 </div>
                                 <div className="text-sm font-semibold text-gray-900 mb-1">{job.title}</div>
                                 <div className="text-xs text-gray-600">{job.client}</div>

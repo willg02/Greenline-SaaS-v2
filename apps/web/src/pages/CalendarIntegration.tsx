@@ -12,7 +12,7 @@ interface CalendarConnection {
   accessToken?: string;
 }
 
-const API_URL = 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export default function CalendarIntegration() {
   const [googleConnection, setGoogleConnection] = useState<CalendarConnection>({
@@ -30,37 +30,17 @@ export default function CalendarIntegration() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check for OAuth callback on component mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const provider = urlParams.get('state'); // We'll use state to identify provider
-
-    if (code) {
-      handleOAuthCallback(code, provider || 'google');
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    // Load saved tokens from localStorage
-    const savedGoogleToken = localStorage.getItem('google_access_token');
-    if (savedGoogleToken) {
-      setGoogleConnection(prev => ({ 
-        ...prev, 
-        connected: true, 
-        accessToken: savedGoogleToken,
-        email: localStorage.getItem('google_email') || undefined
-      }));
-    }
-  }, []);
-
   const handleOAuthCallback = async (code: string, provider: string) => {
     try {
+      console.log('Exchanging code for tokens...', { code: code.substring(0, 20) + '...', provider });
       const response = await axios.post(`${API_URL}/api/schedule/calendar/${provider}/callback`, { code });
+      
+      console.log('Token exchange response:', response.data);
       
       if (response.data.success) {
         const { accessToken, refreshToken } = response.data;
         
+        console.log('Tokens received, storing in localStorage');
         // Store tokens (in production, store these securely on backend)
         localStorage.setItem(`${provider}_access_token`, accessToken);
         if (refreshToken) {
@@ -68,6 +48,7 @@ export default function CalendarIntegration() {
         }
 
         if (provider === 'google') {
+          console.log('Setting Google connection state to connected');
           setGoogleConnection(prev => ({ 
             ...prev, 
             connected: true, 
@@ -77,9 +58,38 @@ export default function CalendarIntegration() {
         }
       }
     } catch (err: any) {
+      console.error('OAuth callback error:', err);
       setError(`Failed to connect to ${provider}: ${err.message}`);
     }
   };
+
+  // Check for OAuth callback on component mount or URL change
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const provider = urlParams.get('state'); // We'll use state to identify provider
+
+    console.log('CalendarIntegration mounted, code:', code);
+
+    if (code) {
+      console.log('Found OAuth code, exchanging for tokens...');
+      handleOAuthCallback(code, provider || 'google');
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Load saved tokens from localStorage
+    const savedGoogleToken = localStorage.getItem('google_access_token');
+    console.log('Saved Google token:', savedGoogleToken ? 'exists' : 'not found');
+    if (savedGoogleToken) {
+      setGoogleConnection(prev => ({ 
+        ...prev, 
+        connected: true, 
+        accessToken: savedGoogleToken,
+        email: localStorage.getItem('google_email') || 'Connected'
+      }));
+    }
+  }, []);
 
   const connectGoogle = async () => {
     try {

@@ -62,11 +62,19 @@ router.post('/calendar/google/callback', async (req, res) => {
   try {
     const { code } = req.body;
     
+    console.log('Received OAuth callback with code:', code ? code.substring(0, 20) + '...' : 'missing');
+    
     if (!code) {
       return res.status(400).json({ error: 'Authorization code required' });
     }
 
+    console.log('Attempting to exchange code for tokens...');
     const tokens = await googleCalendar.getAccessToken(code);
+    console.log('Token exchange successful:', { 
+      hasAccessToken: !!tokens.accessToken, 
+      hasRefreshToken: !!tokens.refreshToken 
+    });
+    
     // TODO: Store tokens in database associated with user
     res.json({ 
       success: true,
@@ -74,7 +82,9 @@ router.post('/calendar/google/callback', async (req, res) => {
       refreshToken: tokens.refreshToken
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'Failed to exchange token', details: error.message });
+    console.error('OAuth callback error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to exchange token', details: error.message, stack: error.stack });
   }
 });
 

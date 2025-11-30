@@ -18,6 +18,7 @@ export default function App() {
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/calendar-integration" element={<CalendarIntegration />} />
+          <Route path="/auth/google/callback" element={<CalendarIntegration />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
