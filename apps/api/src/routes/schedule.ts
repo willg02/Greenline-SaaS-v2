@@ -1,6 +1,8 @@
 import express from 'express';
+import { GoogleCalendarService } from '../services/google-calendar';
 
 const router = express.Router();
+const googleCalendar = new GoogleCalendarService();
 
 // Get all crews
 router.get('/crews', (_req, res) => {
@@ -45,21 +47,89 @@ router.patch('/jobs/:id', (req, res) => {
   res.json({ id, ...updates, updatedAt: new Date().toISOString() });
 });
 
+// Get Google Calendar OAuth URL
+router.get('/calendar/google/auth-url', (_req, res) => {
+  try {
+    const authUrl = googleCalendar.getAuthUrl();
+    res.json({ authUrl });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate auth URL' });
+  }
+});
+
+// Google Calendar OAuth callback
+router.post('/calendar/google/callback', async (req, res) => {
+  try {
+    const { code } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Authorization code required' });
+    }
+
+    const tokens = await googleCalendar.getAccessToken(code);
+    // TODO: Store tokens in database associated with user
+    res.json({ 
+      success: true,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to exchange token', details: error.message });
+  }
+});
+
 // Google Calendar sync
 router.post('/calendar/google/sync', async (req, res) => {
-  // Placeholder for Google Calendar API integration
-  const { accessToken } = req.body;
-  
-  if (!accessToken) {
-    return res.status(400).json({ error: 'Access token required' });
-  }
+  try {
+    const { accessToken, localEvents } = req.body;
+    
+    if (!accessToken) {
+      return res.status(400).json({ error: 'Access token required' });
+    }
 
-  // TODO: Implement Google Calendar API sync
-  res.json({ 
-    synced: true, 
-    eventsImported: 0,
-    message: 'Google Calendar integration coming soon'
-  });
+    const result = await googleCalendar.syncEvents(accessToken, localEvents || []);
+    res.json({ 
+      synced: true,
+      ...result
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Sync failed', details: error.message });
+  }
+});
+
+// Import events from Google Calendar
+router.post('/calendar/google/import', async (req, res) => {
+  try {
+    const { accessToken, startDate, endDate } = req.body;
+    
+    if (!accessToken) {
+      return res.status(400).json({ error: 'Access token required' });
+    }
+
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const events = await googleCalendar.importEvents(accessToken, start, end);
+    res.json({ events });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Import failed', details: error.message });
+  }
+});
+
+// Export job to Google Calendar
+router.post('/calendar/google/export', async (req, res) => {
+  try {
+    const { accessToken, event } = req.body;
+    
+    if (!accessToken || !event) {
+      return res.status(400).json({ error: 'Access token and event required' });
+    }
+
+    const eventId = await googleCalendar.exportEvent(accessToken, event);
+    res.json({ success: true, eventId });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Export failed', details: error.message });
+  }
 });
 
 // Outlook Calendar sync

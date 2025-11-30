@@ -1,13 +1,8 @@
+import { google } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
+
 /**
  * Google Calendar API Integration
- * 
- * Setup Instructions:
- * 1. Go to https://console.cloud.google.com/
- * 2. Create a new project or select existing
- * 3. Enable Google Calendar API
- * 4. Create OAuth 2.0 credentials
- * 5. Add .env variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
- * 6. Install googleapis: npm install googleapis
  */
 
 interface CalendarEvent {
@@ -21,14 +16,14 @@ interface CalendarEvent {
 }
 
 export class GoogleCalendarService {
-  private clientId: string;
-  private clientSecret: string;
-  private redirectUri: string;
+  private oauth2Client: OAuth2Client;
 
   constructor() {
-    this.clientId = process.env.GOOGLE_CLIENT_ID || '';
-    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
-    this.redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5173/auth/google/callback';
+    const clientId = process.env.GOOGLE_CLIENT_ID || '';
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5173/auth/google/callback';
+
+    this.oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
   }
 
   /**
@@ -40,30 +35,22 @@ export class GoogleCalendarService {
       'https://www.googleapis.com/auth/calendar.events'
     ];
 
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      response_type: 'code',
-      scope: scopes.join(' '),
+    return this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
+      scope: scopes,
       prompt: 'consent'
     });
-
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
   /**
    * Exchange authorization code for access token
    */
-  async getAccessToken(code: string): Promise<{ accessToken: string; refreshToken: string }> {
-    // TODO: Implement token exchange with googleapis
-    // const { google } = require('googleapis');
-    // const oauth2Client = new google.auth.OAuth2(this.clientId, this.clientSecret, this.redirectUri);
-    // const { tokens } = await oauth2Client.getToken(code);
+  async getAccessToken(code: string): Promise<{ accessToken: string; refreshToken: string | null | undefined }> {
+    const { tokens } = await this.oauth2Client.getToken(code);
     
     return {
-      accessToken: 'mock_access_token',
-      refreshToken: 'mock_refresh_token'
+      accessToken: tokens.access_token || '',
+      refreshToken: tokens.refresh_token
     };
   }
 
@@ -71,43 +58,137 @@ export class GoogleCalendarService {
    * Import events from Google Calendar
    */
   async importEvents(accessToken: string, startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    // TODO: Implement with googleapis
-    // const { google } = require('googleapis');
-    // const oauth2Client = new google.auth.OAuth2();
-    // oauth2Client.setCredentials({ access_token: accessToken });
-    // const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    // const response = await calendar.events.list({ ... });
+    this.oauth2Client.setCredentials({ access_token: accessToken });
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+
+    const events = response.data.items || [];
     
-    return [];
+    return events.map(event => ({
+      id: event.id || '',
+      title: event.summary || 'Untitled Event',
+      description: event.description,
+      startTime: event.start?.dateTime || event.start?.date || '',
+      endTime: event.end?.dateTime || event.end?.date || '',
+      location: event.location,
+      attendees: event.attendees?.map(a => a.email || '').filter(Boolean)
+    }));
   }
 
   /**
    * Export Greenline job to Google Calendar
    */
   async exportEvent(accessToken: string, event: CalendarEvent): Promise<string> {
-    // TODO: Implement with googleapis
-    // const { google } = require('googleapis');
-    // const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    // const response = await calendar.events.insert({ ... });
-    
-    return 'mock_event_id';
+    this.oauth2Client.setCredentials({ access_token: accessToken });
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: event.title,
+        description: event.description,
+        location: event.location,
+        start: {
+          dateTime: event.startTime,
+          timeZone: 'America/New_York', // TODO: Make timezone configurable
+        },
+        end: {
+          dateTime: event.endTime,
+          timeZone: 'America/New_York',
+        },
+        attendees: event.attendees?.map(email => ({ email })),
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'email', minutes: 24 * 60 },
+            { method: 'popup', minutes: 30 },
+          ],
+        },
+      },
+    });
+
+    return response.data.id || '';
+  }
+
+  /**
+   * Update existing event in Google Calendar
+   */
+  async updateEvent(accessToken: string, eventId: string, event: Partial<CalendarEvent>): Promise<void> {
+    this.oauth2Client.setCredentials({ access_token: accessToken });
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+
+    await calendar.events.patch({
+      calendarId: 'primary',
+      eventId: eventId,
+      requestBody: {
+        summary: event.title,
+        description: event.description,
+        location: event.location,
+        start: event.startTime ? {
+          dateTime: event.startTime,
+          timeZone: 'America/New_York',
+        } : undefined,
+        end: event.endTime ? {
+          dateTime: event.endTime,
+          timeZone: 'America/New_York',
+        } : undefined,
+      },
+    });
+  }
+
+  /**
+   * Delete event from Google Calendar
+   */
+  async deleteEvent(accessToken: string, eventId: string): Promise<void> {
+    this.oauth2Client.setCredentials({ access_token: accessToken });
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+
+    await calendar.events.delete({
+      calendarId: 'primary',
+      eventId: eventId,
+    });
   }
 
   /**
    * Sync bidirectional changes between Greenline and Google Calendar
    */
   async syncEvents(accessToken: string, localEvents: CalendarEvent[]): Promise<{ imported: number; exported: number; conflicts: any[] }> {
-    // TODO: Implement full sync logic
-    // 1. Fetch remote events from Google Calendar
-    // 2. Compare with local events
-    // 3. Resolve conflicts (use latest timestamp or manual resolution)
-    // 4. Push local changes to Google
-    // 5. Pull remote changes to Greenline
+    // Fetch remote events from last 30 days to next 90 days
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 90);
+
+    const remoteEvents = await this.importEvents(accessToken, startDate, endDate);
+    
+    // Simple sync: just count what we imported
+    // In a real implementation, you'd:
+    // 1. Compare event IDs and timestamps
+    // 2. Detect conflicts (both modified since last sync)
+    // 3. Apply resolution strategy (latest wins, manual, etc.)
+    // 4. Export new local events not in Google
+    // 5. Update modified local events
     
     return {
-      imported: 0,
-      exported: 0,
+      imported: remoteEvents.length,
+      exported: 0, // Would export new local events here
       conflicts: []
     };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshAccessToken(refreshToken: string): Promise<string> {
+    this.oauth2Client.setCredentials({ refresh_token: refreshToken });
+    const { credentials } = await this.oauth2Client.refreshAccessToken();
+    return credentials.access_token || '';
   }
 }

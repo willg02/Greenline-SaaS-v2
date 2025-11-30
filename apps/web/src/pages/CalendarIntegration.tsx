@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import axios from 'axios';
 
 interface CalendarConnection {
   provider: 'google' | 'outlook';
@@ -8,7 +9,10 @@ interface CalendarConnection {
   email?: string;
   lastSync?: string;
   syncEnabled: boolean;
+  accessToken?: string;
 }
+
+const API_URL = 'http://localhost:4000';
 
 export default function CalendarIntegration() {
   const [googleConnection, setGoogleConnection] = useState<CalendarConnection>({
@@ -24,18 +28,79 @@ export default function CalendarIntegration() {
   });
 
   const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const connectGoogle = () => {
-    // TODO: Initiate Google OAuth flow
-    window.location.href = 'http://localhost:4000/api/schedule/calendar/google/auth';
+  // Check for OAuth callback on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const provider = urlParams.get('state'); // We'll use state to identify provider
+
+    if (code) {
+      handleOAuthCallback(code, provider || 'google');
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Load saved tokens from localStorage
+    const savedGoogleToken = localStorage.getItem('google_access_token');
+    if (savedGoogleToken) {
+      setGoogleConnection(prev => ({ 
+        ...prev, 
+        connected: true, 
+        accessToken: savedGoogleToken,
+        email: localStorage.getItem('google_email') || undefined
+      }));
+    }
+  }, []);
+
+  const handleOAuthCallback = async (code: string, provider: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/api/schedule/calendar/${provider}/callback`, { code });
+      
+      if (response.data.success) {
+        const { accessToken, refreshToken } = response.data;
+        
+        // Store tokens (in production, store these securely on backend)
+        localStorage.setItem(`${provider}_access_token`, accessToken);
+        if (refreshToken) {
+          localStorage.setItem(`${provider}_refresh_token`, refreshToken);
+        }
+
+        if (provider === 'google') {
+          setGoogleConnection(prev => ({ 
+            ...prev, 
+            connected: true, 
+            accessToken,
+            email: 'Connected' // TODO: Fetch user email from Google
+          }));
+        }
+      }
+    } catch (err: any) {
+      setError(`Failed to connect to ${provider}: ${err.message}`);
+    }
+  };
+
+  const connectGoogle = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/schedule/calendar/google/auth-url`);
+      // Redirect to Google OAuth
+      window.location.href = response.data.authUrl;
+    } catch (err: any) {
+      setError(`Failed to initiate Google OAuth: ${err.message}`);
+    }
   };
 
   const connectOutlook = () => {
-    // TODO: Initiate Outlook OAuth flow
-    window.location.href = 'http://localhost:4000/api/schedule/calendar/outlook/auth';
+    setError('Outlook Calendar integration coming soon!');
   };
 
   const disconnect = (provider: 'google' | 'outlook') => {
+    // Clear tokens
+    localStorage.removeItem(`${provider}_access_token`);
+    localStorage.removeItem(`${provider}_refresh_token`);
+    localStorage.removeItem(`${provider}_email`);
+
     if (provider === 'google') {
       setGoogleConnection({ provider: 'google', connected: false, syncEnabled: false });
     } else {
@@ -53,16 +118,27 @@ export default function CalendarIntegration() {
 
   const syncNow = async () => {
     setSyncing(true);
-    // TODO: Call sync API
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      if (googleConnection.connected && googleConnection.accessToken) {
+        const response = await axios.post(`${API_URL}/api/schedule/calendar/google/sync`, {
+          accessToken: googleConnection.accessToken,
+          localEvents: [] // TODO: Pass actual local jobs to sync
+        });
+
+        if (response.data.synced) {
+          setGoogleConnection(prev => ({ 
+            ...prev, 
+            lastSync: new Date().toLocaleString() 
+          }));
+        }
+      }
+    } catch (err: any) {
+      setError(`Sync failed: ${err.message}`);
+    } finally {
       setSyncing(false);
-      if (googleConnection.connected) {
-        setGoogleConnection(prev => ({ ...prev, lastSync: new Date().toLocaleString() }));
-      }
-      if (outlookConnection.connected) {
-        setOutlookConnection(prev => ({ ...prev, lastSync: new Date().toLocaleString() }));
-      }
-    }, 2000);
+    }
   };
 
   return (
@@ -71,6 +147,23 @@ export default function CalendarIntegration() {
         <h1 className="text-3xl font-bold mb-2">Calendar Integration</h1>
         <p className="text-gray-600">Connect your Google or Outlook calendar to sync Greenline jobs</p>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 max-w-4xl p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-red-900">Error</p>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-600 hover:text-red-800"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-6 max-w-4xl">
         {/* Google Calendar */}
