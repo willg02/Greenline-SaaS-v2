@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import axios from 'axios';
@@ -15,6 +16,7 @@ interface CalendarConnection {
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export default function CalendarIntegration() {
+  const navigate = useNavigate();
   const [googleConnection, setGoogleConnection] = useState<CalendarConnection>({
     provider: 'google',
     connected: false,
@@ -73,9 +75,10 @@ export default function CalendarIntegration() {
 
     if (code) {
       console.log('Found OAuth code, exchanging for tokens...');
-      handleOAuthCallback(code, provider || 'google');
-      // Redirect to calendar-integration page after handling callback
-      window.history.replaceState({}, document.title, '/calendar-integration');
+      handleOAuthCallback(code, provider || 'google').then(() => {
+        // Navigate to calendar-integration page after handling callback
+        navigate('/calendar-integration', { replace: true });
+      });
     }
 
     // Load saved tokens from localStorage
