@@ -74,10 +74,10 @@ export class GoogleCalendarService {
     return events.map(event => ({
       id: event.id || '',
       title: event.summary || 'Untitled Event',
-      description: event.description,
+      description: event.description || undefined,
       startTime: event.start?.dateTime || event.start?.date || '',
       endTime: event.end?.dateTime || event.end?.date || '',
-      location: event.location,
+      location: event.location || undefined,
       attendees: event.attendees?.map(a => a.email || '').filter(Boolean)
     }));
   }

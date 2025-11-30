@@ -4,8 +4,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { calcQuote } from './services/pricing';
-import scheduleRoutes from './routes/schedule';
+import { calcQuote } from './services/pricing.js';
+import scheduleRoutes from './routes/schedule.js';
 
 const app = express();
 app.use(cors());
